@@ -182,10 +182,58 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
     v_kernel_args = tuple(start_momentum_kernel_args..., v_immersed_bc, end_momentum_kernel_args...)
 
     for parameters in kernel_parameters
+        # launch!(arch, grid, parameters,
+        #         compute_hydrostatic_free_surface_Gu!, model.timestepper.Gⁿ.u, grid, 
+        #         only_active_cells, u_kernel_args;
+        #         only_active_cells)
+        # (joe@fluidnumerics.com) : Replace single large kernel launch with multiple kernel launches
+        # Momentum advection
         launch!(arch, grid, parameters,
-                compute_hydrostatic_free_surface_Gu!, model.timestepper.Gⁿ.u, grid, 
-                only_active_cells, u_kernel_args;
-                only_active_cells)
+                U_dot_∇u_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                model.advection.momentum,
+                velocities)
+
+        # Barotropic pressure gradient
+        launch!(arch, grid, parameters,
+                explicit_barotropic_pressure_x_gradient_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                model.advection.free_surface)
+
+        # Coriolis force
+        launch!(arch, grid, parameters,
+                x_f_cross_U_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                model.coriolis, velocities)
+
+        # Baroclinic pressure gradient
+        launch!(arch, grid, parameters,
+                ∂xᶠᶜᶜ_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                model.pressure.pHY′)
+
+        # Stress divergence
+        model_fields = merge(hydrostatic_fields(velocities, model.advection.free_surface, model.tracers), model.auxiliary_fields)
+        launch!(arch, grid, parameters,
+                ∂ⱼ_τ₁ⱼ_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                model.closure, model.diffusivity_fields, model.clock,
+                model_fields, model.buoyancy)
+
+        # Stress divergence (immersed cells)
+        launch!(arch, grid, parameters,
+                immersed_∂ⱼ_τ₁ⱼ_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                velocities, u_immersed_bc, model.closure, model.diffusivity_fields, model.clock,
+                model_fields)
+
+        # Stress divergence (immersed cells)
+        launch!(arch, grid, parameters,
+                forcings_u_kernel!,
+                model.timestepper.Gⁿ.u, grid, only_active_cells,
+                forcings, model.clock, velocities, model.free_surface, model.tracers)
+
+       
 
         launch!(arch, grid, parameters,
                 compute_hydrostatic_free_surface_Gv!, model.timestepper.Gⁿ.v, grid, 
@@ -232,6 +280,7 @@ end
     i, j, k = active_linear_index_to_tuple(idx, map, grid)
     @inbounds Gu[i, j, k] = hydrostatic_free_surface_u_velocity_tendency(i, j, k, grid, args...)
 end
+
 
 """ Calculate the right-hand-side of the v-velocity equation. """
 @kernel function compute_hydrostatic_free_surface_Gv!(Gv, grid, map, args)
