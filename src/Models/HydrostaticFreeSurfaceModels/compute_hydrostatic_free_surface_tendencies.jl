@@ -198,7 +198,7 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
         launch!(arch, grid, parameters,
                 explicit_barotropic_pressure_x_gradient_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
-                model.advection.free_surface)
+                model.free_surface)
 
         # Coriolis force
         launch!(arch, grid, parameters,
@@ -213,7 +213,7 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
                 model.pressure.pHY′)
 
         # Stress divergence
-        model_fields = merge(hydrostatic_fields(velocities, model.advection.free_surface, model.tracers), model.auxiliary_fields)
+        model_fields = merge(hydrostatic_fields(velocities, model.free_surface, model.tracers), model.auxiliary_fields)
         launch!(arch, grid, parameters,
                 ∂ⱼ_τ₁ⱼ_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
