@@ -227,11 +227,11 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
                 velocities, u_immersed_bc, model.closure, model.diffusivity_fields, model.clock,
                 model_fields)
 
-        # Stress divergence (immersed cells)
+        # Additional x-momentum forcing
         launch!(arch, grid, parameters,
                 forcings_u_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
-                forcings, model.clock, velocities, model.free_surface, model.tracers)
+                model.forcing, model.clock, velocities, model.free_surface, model.tracers)
 
        
 
