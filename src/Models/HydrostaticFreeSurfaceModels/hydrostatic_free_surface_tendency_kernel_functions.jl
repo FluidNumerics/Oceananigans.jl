@@ -52,91 +52,6 @@ implicitly during time-stepping.
              + forcings.u(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers)))
 end
 
-#### Tendency calculations with smaller kernels ####
-#### Contributed by joe@fluidnumerics.com
-####
-
-@kernel function U_dot_∇u_kernel!(Gu,grid,map,advection,velocities)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] = -U_dot_∇u(i, j, k, grid, advection, velocities)
-end
-
-@kernel function explicit_barotropic_pressure_x_gradient_kernel!(Gu, grid, map, free_surface)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] -= explicit_barotropic_pressure_x_gradient(i, j, k, grid, free_surface)
-end
-
-@kernel function x_f_cross_U_kernel!(Gu, grid, map, coriolis, velocities)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] -= x_f_cross_U(i, j, k, grid, coriolis, velocities)
-end
-
-@kernel function ∂xᶠᶜᶜ_kernel!(Gu, grid, map, hydrostatic_pressure_anomaly)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] -= ∂xᶠᶜᶜ(i, j, k, grid, hydrostatic_pressure_anomaly)
-end
-
-@kernel function ∂ⱼ_τ₁ⱼ_kernel!(Gu, grid, map, closure, diffusivities, clock, model_fields, buoyancy)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] -= ∂ⱼ_τ₁ⱼ(i, j, k, grid, closure, diffusivities, clock, model_fields, buoyancy)
-end
-
-@kernel function immersed_∂ⱼ_τ₁ⱼ_kernel!(Gu, grid, map, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] -= immersed_∂ⱼ_τ₁ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
-end
-
-@kernel function forcings_u_kernel!(Gu, grid, map, forcings, clock, velocities, free_surface, tracers)
-    i, j, k = @index(Global, NTuple)
-    @inbounds Gu[i, j, k] += forcings.u(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers))
-end
-
-
-#---
-@kernel function U_dot_∇u_kernel!(Gu,grid::ActiveCellsIBG,map,advection,velocities)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] = -U_dot_∇u(i, j, k, grid, advection, velocities)
-end
-
-@kernel function explicit_barotropic_pressure_x_gradient_kernel!(Gu, grid::ActiveCellsIBG, map,free_surface)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] -= explicit_barotropic_pressure_x_gradient(i, j, k, grid, free_surface)
-end
-
-@kernel function x_f_cross_U_kernel!(Gu, grid::ActiveCellsIBG, map,coriolis, velocities)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] -= x_f_cross_U(i, j, k, grid, coriolis, velocities)
-end
-
-@kernel function ∂xᶠᶜᶜ_kernel!(Gu, grid::ActiveCellsIBG, map,hydrostatic_pressure_anomaly)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] -= ∂xᶠᶜᶜ(i, j, k, grid, hydrostatic_pressure_anomaly)
-end
-
-@kernel function ∂ⱼ_τ₁ⱼ_kernel!(Gu, grid::ActiveCellsIBG, map,closure, diffusivities, clock, model_fields, buoyancy)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] -= ∂ⱼ_τ₁ⱼ(i, j, k, grid, closure, diffusivities, clock, model_fields, buoyancy)
-end
-
-@kernel function immersed_∂ⱼ_τ₁ⱼ!(Gu, grid::ActiveCellsIBG, map,velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] -= immersed_∂ⱼ_τ₁ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
-end
-
-@kernel function immersed_∂ⱼ_τ₁ⱼ!(Gu, grid::ActiveCellsIBG, map,clock, velocities, free_surface, tracers)
-    idx = @index(Global, Linear)
-    i, j, k = active_linear_index_to_tuple(idx, map, grid)
-    @inbounds Gu[i, j, k] += forcings.u(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers))
-end
-
-#####################################################
-
 """
 Return the tendency for the horizontal velocity in the ``y``-direction, or the east-west 
 direction, ``v``, at grid point `i, j, k` for a `HydrostaticFreeSurfaceModel`.
@@ -175,6 +90,171 @@ implicitly during time-stepping.
              - immersed_∂ⱼ_τ₂ⱼ(i, j, k, grid, velocities, v_immersed_bc, closure, diffusivities, clock, model_fields)
              + forcings.v(i, j, k, grid, clock, model_fields))
 end
+
+#### Tendency calculations with smaller kernels ####
+#### Contributed by joe@fluidnumerics.com
+####
+
+@kernel function U_dot_∇u_kernel!(Gu,grid,map,advection,velocities)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] = -U_dot_∇u(i, j, k, grid, advection, velocities)
+end
+
+@kernel function U_dot_∇v_kernel!(Gu,grid,map,advection,velocities)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] = -U_dot_∇v(i, j, k, grid, advection, velocities)
+end
+
+@kernel function explicit_barotropic_pressure_x_gradient_kernel!(Gu, grid, map, free_surface)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= explicit_barotropic_pressure_x_gradient(i, j, k, grid, free_surface)
+end
+
+@kernel function explicit_barotropic_pressure_y_gradient_kernel!(Gu, grid, map, free_surface)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= explicit_barotropic_pressure_y_gradient(i, j, k, grid, free_surface)
+end
+
+@kernel function x_f_cross_U_kernel!(Gu, grid, map, coriolis, velocities)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= x_f_cross_U(i, j, k, grid, coriolis, velocities)
+end
+
+@kernel function y_f_cross_U_kernel!(Gu, grid, map, coriolis, velocities)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= y_f_cross_U(i, j, k, grid, coriolis, velocities)
+end
+
+@kernel function ∂xᶠᶜᶜ_kernel!(Gu, grid, map, hydrostatic_pressure_anomaly)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= ∂xᶠᶜᶜ(i, j, k, grid, hydrostatic_pressure_anomaly)
+end
+
+@kernel function ∂yᶜᶠᶜ_kernel!(Gu, grid, map, hydrostatic_pressure_anomaly)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= ∂yᶜᶠᶜ(i, j, k, grid, hydrostatic_pressure_anomaly)
+end
+
+@kernel function ∂ⱼ_τ₁ⱼ_kernel!(Gu, grid, map, closure, diffusivities, clock, model_fields, buoyancy)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= ∂ⱼ_τ₁ⱼ(i, j, k, grid, closure, diffusivities, clock, model_fields, buoyancy)
+end
+
+@kernel function ∂ⱼ_τ₂ⱼ_kernel!(Gu, grid, map, closure, diffusivities, clock, model_fields, buoyancy)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= ∂ⱼ_τ₂ⱼ(i, j, k, grid, closure, diffusivities, clock, model_fields, buoyancy)
+end
+
+@kernel function immersed_∂ⱼ_τ₁ⱼ_kernel!(Gu, grid, map, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= immersed_∂ⱼ_τ₁ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+end
+
+@kernel function immersed_∂ⱼ_τ₂ⱼ_kernel!(Gu, grid, map, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] -= immersed_∂ⱼ_τ₂ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+end
+
+@kernel function forcings_u_kernel!(Gu, grid, map, forcings, clock, velocities, free_surface, tracers)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] += forcings.u(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers))
+end
+
+@kernel function forcings_v_kernel!(Gu, grid, map, forcings, clock, velocities, free_surface, tracers)
+    i, j, k = @index(Global, NTuple)
+    @inbounds Gu[i, j, k] += forcings.v(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers))
+end
+
+
+#---
+@kernel function U_dot_∇u_kernel!(Gu,grid::ActiveCellsIBG,map,advection,velocities)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] = -U_dot_∇u(i, j, k, grid, advection, velocities)
+end
+
+@kernel function U_dot_∇v_kernel!(Gu,grid::ActiveCellsIBG,map,advection,velocities)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] = -U_dot_∇v(i, j, k, grid, advection, velocities)
+end
+
+@kernel function explicit_barotropic_pressure_x_gradient_kernel!(Gu, grid::ActiveCellsIBG, map,free_surface)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= explicit_barotropic_pressure_x_gradient(i, j, k, grid, free_surface)
+end
+
+@kernel function explicit_barotropic_pressure_y_gradient_kernel!(Gu, grid::ActiveCellsIBG, map, free_surface)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= explicit_barotropic_pressure_y_gradient(i, j, k, grid, free_surface)
+end
+
+@kernel function x_f_cross_U_kernel!(Gu, grid::ActiveCellsIBG, map,coriolis, velocities)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= x_f_cross_U(i, j, k, grid, coriolis, velocities)
+end
+
+@kernel function y_f_cross_U_kernel!(Gu, grid::ActiveCellsIBG, map, coriolis, velocities)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= y_f_cross_U(i, j, k, grid, coriolis, velocities)
+end
+
+@kernel function ∂xᶠᶜᶜ_kernel!(Gu, grid::ActiveCellsIBG, map,hydrostatic_pressure_anomaly)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= ∂xᶠᶜᶜ(i, j, k, grid, hydrostatic_pressure_anomaly)
+end
+
+@kernel function ∂yᶜᶠᶜ_kernel!(Gu, grid::ActiveCellsIBG, map, hydrostatic_pressure_anomaly)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= ∂yᶜᶠᶜ(i, j, k, grid, hydrostatic_pressure_anomaly)
+end
+
+@kernel function ∂ⱼ_τ₁ⱼ_kernel!(Gu, grid::ActiveCellsIBG, map,closure, diffusivities, clock, model_fields, buoyancy)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= ∂ⱼ_τ₁ⱼ(i, j, k, grid, closure, diffusivities, clock, model_fields, buoyancy)
+end
+
+@kernel function ∂ⱼ_τ₂ⱼ_kernel!(Gu, grid::ActiveCellsIBG, map, closure, diffusivities, clock, model_fields, buoyancy)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= ∂ⱼ_τ₂ⱼ(i, j, k, grid, closure, diffusivities, clock, model_fields, buoyancy)
+end
+
+@kernel function immersed_∂ⱼ_τ₁ⱼ!(Gu, grid::ActiveCellsIBG, map,velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= immersed_∂ⱼ_τ₁ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+end
+
+@kernel function immersed_∂ⱼ_τ₂ⱼ_kernel!(Gu, grid::ActiveCellsIBG, map, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] -= immersed_∂ⱼ_τ₂ⱼ(i, j, k, grid, velocities, u_immersed_bc, closure, diffusivities, clock, model_fields)
+end
+
+@kernel function forcings_u_kernel!(Gu, grid::ActiveCellsIBG, map,clock, velocities, free_surface, tracers)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] += forcings.u(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers))
+end
+
+@kernel function forcings_v_kernel!(Gu, grid::ActiveCellsIBG, map, forcings, clock, velocities, free_surface, tracers)
+    idx = @index(Global, Linear)
+    i, j, k = active_linear_index_to_tuple(idx, map, grid)
+    @inbounds Gu[i, j, k] += forcings.v(i, j, k, grid, clock, hydrostatic_prognostic_fields(velocities, free_surface, tracers))
+end
+
+
+#####################################################
+
+
 
 """
 Return the tendency for a tracer field with index `tracer_index` 

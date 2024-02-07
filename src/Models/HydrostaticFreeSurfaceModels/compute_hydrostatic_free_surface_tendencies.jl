@@ -186,33 +186,41 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
         #         compute_hydrostatic_free_surface_Gu!, model.timestepper.Gⁿ.u, grid, 
         #         only_active_cells, u_kernel_args;
         #         only_active_cells)
+
+        # launch!(arch, grid, parameters,
+        #         compute_hydrostatic_free_surface_Gv!, model.timestepper.Gⁿ.v, grid, 
+        #         only_active_cells, v_kernel_args;
+        #         only_active_cells)
+
         # (joe@fluidnumerics.com) : Replace single large kernel launch with multiple kernel launches
-        # Momentum advection
+        
+        # x-momentum equation
+        # Momentum advection (x-component)
         launch!(arch, grid, parameters,
                 U_dot_∇u_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
                 model.advection.momentum,
                 velocities)
 
-        # Barotropic pressure gradient
+        # Barotropic pressure gradient (x-component)
         launch!(arch, grid, parameters,
                 explicit_barotropic_pressure_x_gradient_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
                 model.free_surface)
 
-        # Coriolis force
+        # Coriolis force (x-component)
         launch!(arch, grid, parameters,
                 x_f_cross_U_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
                 model.coriolis, velocities)
 
-        # Baroclinic pressure gradient
+        # Baroclinic pressure gradient (x-component)
         launch!(arch, grid, parameters,
                 ∂xᶠᶜᶜ_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
                 model.pressure.pHY′)
 
-        # Stress divergence
+        # Stress divergence (x-component)
         model_fields = merge(hydrostatic_fields(velocities, model.free_surface, model.tracers), model.auxiliary_fields)
         launch!(arch, grid, parameters,
                 ∂ⱼ_τ₁ⱼ_kernel!,
@@ -220,7 +228,7 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
                 model.closure, model.diffusivity_fields, model.clock,
                 model_fields, model.buoyancy)
 
-        # Stress divergence (immersed cells)
+        # Stress divergence (immersed cells) (x-component)
         launch!(arch, grid, parameters,
                 immersed_∂ⱼ_τ₁ⱼ_kernel!,
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
@@ -233,12 +241,52 @@ function compute_hydrostatic_momentum_tendencies!(model, velocities, kernel_para
                 model.timestepper.Gⁿ.u, grid, only_active_cells,
                 model.forcing, model.clock, velocities, model.free_surface, model.tracers)
 
-       
-
+        # y-momentum equation
+        # Advection of meridional momentum
         launch!(arch, grid, parameters,
-                compute_hydrostatic_free_surface_Gv!, model.timestepper.Gⁿ.v, grid, 
-                only_active_cells, v_kernel_args;
-                only_active_cells)
+                U_dot_∇v_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                model.advection.momentum,
+                velocities)
+
+        # Barotropic pressure gradient (y-component)
+        launch!(arch, grid, parameters,
+                explicit_barotropic_pressure_y_gradient_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                model.free_surface)
+
+        # Coriolis force (y-component)
+        launch!(arch, grid, parameters,
+                y_f_cross_U_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                model.coriolis, velocities)
+
+        # Baroclinic pressure gradient (y-component)
+        launch!(arch, grid, parameters,
+                ∂yᶜᶠᶜ_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                model.pressure.pHY′)
+
+        # Stress divergence (y-component)
+        model_fields = merge(hydrostatic_fields(velocities, model.free_surface, model.tracers), model.auxiliary_fields)
+        launch!(arch, grid, parameters,
+                ∂ⱼ_τ₂ⱼ_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                model.closure, model.diffusivity_fields, model.clock,
+                model_fields, model.buoyancy)
+
+        # Stress divergence (immersed cells) (y-component)
+        launch!(arch, grid, parameters,
+                immersed_∂ⱼ_τ₂ⱼ_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                velocities, u_immersed_bc, model.closure, model.diffusivity_fields, model.clock,
+                model_fields)
+
+        # Additional y-momentum forcing 
+        launch!(arch, grid, parameters,
+                forcings_v_kernel!,
+                model.timestepper.Gⁿ.v, grid, only_active_cells,
+                model.forcing, model.clock, velocities, model.free_surface, model.tracers)
     end
 
     compute_free_surface_tendency!(grid, model, :xy)
